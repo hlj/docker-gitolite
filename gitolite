@@ -1,0 +1,98 @@
+#! /bin/bash -
+
+#####################################################
+# Shell script for gitolite container.
+# Author: Beta CZ <hlj8080@gmail.com>
+#####################################################
+
+# configure variables, modify them to suit your situation.
+IMAGE_NAME=${IMAGE_NAME:-"betacz/gitolite"}
+CONTAINER_NAME=${CONTAINER_NAME:-gitolite-server}
+PORT=${PORT:-2222}
+GIT_DATA_PATH=${GIT_DATA_PATH:-/opt/git}
+SSH_KEY_FILE=${SSH_KEY_FILE:-"$HOME/.ssh/id_rsa.pub"}
+
+# run command
+start_cmd="docker run -d -p $PORT:22 --name ${CONTAINER_NAME} -e SSH_KEY=\"$(cat $SSH_KEY_FILE)\"  -v ${GIT_DATA_PATH}:/home/git/repositories  ${IMAGE_NAME}"
+
+# get container's status
+container=(`docker ps | grep ${CONTAINER_NAME}`)
+container_stopped=(`docker ps -a | grep ${CONTAINER_NAME}`)
+
+
+usage()
+{
+  echo " * Usage: $0 {start|stop|kill|remove|status}"
+  exit 255
+}
+
+if [ $# -ne 1 ]; then
+  usage
+fi
+
+if [ $1 != "start" ] && [ -z $container ] && [ -z $container_stopped ]; then
+  echo "ERROR：Container '${CONTAINER_NAME}' not exists."
+  exit 255
+fi
+
+case $1 in
+start)
+  if [ $container ]
+  then
+    echo "${CONTAINER_NAME} is running, don't repeat run!"
+    exit 255
+  fi
+
+  if [ $container_stopped ]
+  then
+    echo "${CONTAINER_NAME} is stopped，start now..."
+    docker start ${CONTAINER_NAME}
+  else
+    echo "${CONTAINER_NAME} starting..."
+    if [ ! -d "${GIT_DATA_PATH}" ]; then
+       echo "ERROR: ${GIT_DATA_PATH} not exists，please create it first."
+       exit 255
+    fi
+    container_id=$(sh -c "${start_cmd}")
+  fi
+  echo -e "Start successful.\nName: ${CONTAINER_NAME}\n  Id: ${container_id}"
+  ;;
+stop)
+  if [ $container ]; then
+    docker stop ${CONTAINER_NAME}
+    echo "${CONTAINER_NAME} stopped."
+  elif [ $container_stopped ]; then
+    echo "${CONTAINER_NAME} has stopped."
+  fi
+  ;;
+kill)
+  if [ $container ]; then
+    docker kill ${CONTAINER_NAME}
+    echo "${CONTAINER_NAME} killed."
+  elif [ $container_stopped ]; then
+    echo "${CONTAINER_NAME} has stopped."
+  fi
+  ;;
+remove)
+  if [ $container ]; then
+    echo "ERROR: ${CONTAINER_NAME} is running, can't remove!"
+    exit 255
+  elif [ $container_stopped ]; then
+    docker rm ${CONTAINER_NAME}
+    echo "${CONTAINER_NAME} removed."
+  fi
+  ;;
+status)
+  if [ $container ]; then
+    echo "${CONTAINER_NAME} is running."
+  elif [ $container_stopped ]; then
+    echo "${CONTAINER_NAME} has created but stop now."
+  else
+    echo "${CONTAINER_NAME} is not found！"
+  fi
+  ;;
+*)
+  usage
+  ;;
+esac
+exit 0
